@@ -1,21 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { weatherById } from '../data/weather'
-import { progressLabel, snapProgress } from '../data/timeline'
+import { positionFromPoint, progressLabel } from '../data/timeline'
 
 const TAU = Math.PI * 2
 
 export function positionToMoment(clientX, clientY, element, startYear) {
-  const rect = element.getBoundingClientRect()
-  const center = rect.width / 2
-  const dx = clientX - rect.left - center
-  const dy = clientY - rect.top - center
-  const distance = Math.hypot(dx, dy)
-  const outer = rect.width * 0.39
-  const inner = outer * 0.57
-  if (distance < inner - 12 || distance > outer + 16) return null
-  let angle = Math.atan2(dy, dx) + Math.PI / 2
-  if (angle < 0) angle += TAU
-  return { progress: snapProgress(angle / TAU, startYear), intensity: Math.max(0, Math.min(1, (distance - inner) / (outer - inner))) }
+  return positionFromPoint(clientX, clientY, element, 'circle', startYear)
 }
 
 const momentPoint = (moment, size) => {
@@ -27,11 +17,10 @@ const momentPoint = (moment, size) => {
   return { x: center + Math.cos(angle) * radius, y: center + Math.sin(angle) * radius }
 }
 
-export function StoryCircle({ moments, startYear, interactive = false, onAdd, onMove, onPreview }) {
+export function StoryCircle({ moments, startYear, interactive = false, dropActive = false, onAdd, onMove, onPreview }) {
   const canvasRef = useRef(null)
   const moving = useRef(null)
   const suppressClick = useRef(false)
-  const [dragOver, setDragOver] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -88,19 +77,14 @@ export function StoryCircle({ moments, startYear, interactive = false, onAdd, on
     const value = getPosition(event)
     if (value) onAdd(value)
   }
-  const handleDrop = (event) => {
-    event.preventDefault(); setDragOver(false)
-    const value = getPosition(event)
-    const momentId = event.dataTransfer.getData('application/x-meteostory-moment')
-    const weather = event.dataTransfer.getData('application/x-meteostory-weather') || event.dataTransfer.getData('text/plain')
-    if (value && momentId) onMove?.(momentId, value)
-    else if (value && weatherById(weather)) onAdd?.({ ...value, weather })
-    preview(value)
+  const finishMove = () => {
+    moving.current = null
+    // A click is dispatched after pointerup. Clear the guard just after it.
+    setTimeout(() => { suppressClick.current = false }, 0)
   }
 
-  return <canvas ref={canvasRef} className={`story-circle${dragOver ? ' drag-over' : ''}`} data-timeline="circle"
+  return <canvas ref={canvasRef} className={`story-circle${interactive ? ' interactive' : ''}${dropActive ? ' drag-over' : ''}`} data-timeline="circle"
     onClick={handleClick} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}
-    onPointerUp={() => { moving.current = null }} onPointerCancel={() => { moving.current = null }} onPointerLeave={() => !moving.current && preview(null)}
-    onDragEnter={() => setDragOver(true)} onDragLeave={() => setDragOver(false)} onDragOver={(event) => { event.preventDefault(); preview(getPosition(event)) }} onDrop={handleDrop}
+    onPointerUp={finishMove} onPointerCancel={finishMove} onLostPointerCapture={finishMove} onPointerLeave={() => !moving.current && preview(null)}
     aria-label="Frise chronologique circulaire, zone de dépôt et de repositionnement des météos" />
 }
