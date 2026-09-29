@@ -1,12 +1,13 @@
 import { useCallback, useState } from 'react'
 
-const KEY = 'meteostory.story.v1'
-const fallback = () => ({ startYear: new Date().getFullYear() - 8, moments: [] })
+const KEY = 'meteostoory.story.v1'
+const LEGACY_KEY = 'meteostory.story.v1'
+const fallback = () => ({ startYear: new Date().getFullYear() - 8, moments: [], mode: 'solo', participants: [{ id: 'solo', name: 'Moi' }] })
 
 const readStory = () => {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY))
-    return saved?.startYear && Array.isArray(saved.moments) ? saved : fallback()
+    const saved = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY))
+    return saved?.startYear && Array.isArray(saved.moments) ? { mode: 'solo', participants: [{ id: 'solo', name: 'Moi' }], ...saved } : fallback()
   } catch {
     return fallback()
   }

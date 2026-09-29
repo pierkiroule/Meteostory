@@ -3,6 +3,7 @@ import { weatherById } from '../data/weather'
 import { collisionLanes, positionFromPoint, progressLabel, timelineTicks } from '../data/timeline'
 
 const TAU = Math.PI * 2
+const EMPTY_PARTICIPANTS = []
 
 export function positionToMoment(clientX, clientY, element, startYear) {
   return positionFromPoint(clientX, clientY, element, 'circle', startYear)
@@ -15,7 +16,7 @@ const momentPoint = (moment, size, lane = 0) => {
   return { x: center + Math.cos(angle) * radius, y: center + Math.sin(angle) * radius }
 }
 
-export function StoryCircle({ moments, startYear, interactive = false, dropActive = false, previewPosition, onAdd, onMove, onMoveEnd, onPreview }) {
+export function StoryCircle({ moments, participants = EMPTY_PARTICIPANTS, startYear, interactive = false, dropActive = false, previewPosition, onAdd, onMove, onMoveEnd, onPreview }) {
   const canvasRef = useRef(null)
   const moving = useRef(null)
   const suppressClick = useRef(false)
@@ -31,7 +32,7 @@ export function StoryCircle({ moments, startYear, interactive = false, dropActiv
     context.scale(ratio, ratio)
     const center = size / 2
     const radius = size * .34
-    const styles = getComputedStyle(document.documentElement)
+    const styles = getComputedStyle(canvas.closest('.app-shell') || document.documentElement)
     context.clearRect(0, 0, size, size)
     context.beginPath(); context.arc(center, center, radius, 0, TAU)
     context.lineWidth = dropActive ? 4 : 2
@@ -41,6 +42,10 @@ export function StoryCircle({ moments, startYear, interactive = false, dropActiv
       const weather = weatherById(moment.weather)
       if (!weather) return
       const { x, y } = momentPoint(moment, size, lanes.get(moment.id) || 0)
+      const personIndex = participants.findIndex((person) => person.id === moment.author)
+      if (personIndex >= 0 && participants.length > 1) {
+        context.beginPath(); context.arc(x, y, 18, 0, TAU); context.lineWidth = 2; context.strokeStyle = `hsl(${personIndex * 95 + 188} 45% 48%)`; context.stroke()
+      }
       const gradient = context.createRadialGradient(x, y, 0, x, y, 38)
       gradient.addColorStop(0, `${weather.color}88`); gradient.addColorStop(1, `${weather.color}00`)
       context.fillStyle = gradient; context.fillRect(x - 38, y - 38, 76, 76)
@@ -58,7 +63,7 @@ export function StoryCircle({ moments, startYear, interactive = false, dropActiv
       const { x, y } = momentPoint(previewPosition, size)
       context.beginPath(); context.arc(x, y, 9, 0, TAU); context.fillStyle = styles.getPropertyValue('--accent'); context.globalAlpha = .3; context.fill(); context.globalAlpha = 1
     }
-  }, [dropActive, moments, previewPosition, startYear])
+  }, [dropActive, moments, participants, previewPosition, startYear])
 
   const getPosition = (event) => positionToMoment(event.clientX, event.clientY, event.currentTarget, startYear)
   const preview = (value) => onPreview?.(value ? progressLabel(value.progress, startYear) : '')

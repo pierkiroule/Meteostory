@@ -6,7 +6,7 @@ export function linearPosition(clientX, clientY, element, view, startYear) {
   return positionFromPoint(clientX, clientY, element, view, startYear)
 }
 
-export function StoryTimeline({ moments, startYear, view, interactive = false, dropActive = false, previewPosition, onMove, onMoveEnd, onPreview }) {
+export function StoryTimeline({ moments, participants = [], startYear, view, interactive = false, dropActive = false, previewPosition, onMove, onMoveEnd, onPreview }) {
   const activeMoment = useRef(null)
   const didMove = useRef(false)
   const lanes = collisionLanes(moments, view === 'horizontal' ? .075 : .055)
@@ -41,9 +41,11 @@ export function StoryTimeline({ moments, startYear, view, interactive = false, d
     {moments.map((moment) => {
       const weather = weatherById(moment.weather)
       const lane = lanes.get(moment.id) || 0
+      const personIndex = participants.findIndex((person) => person.id === moment.author)
       const style = view === 'horizontal'
         ? { left: `${moment.progress * 100}%`, top: `calc(50% + ${lane * 32}px)` }
         : { top: `${moment.progress * 100}%`, left: `calc(50% + ${lane * 32}px)` }
+      if (personIndex >= 0 && participants.length > 1) style.borderColor = `hsl(${personIndex * 95 + 188} 45% 48%)`
       return <button
         key={moment.id}
         className="timeline-moment"
