@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { StoryCircle, positionToMoment } from './components/StoryCircle'
+import { StoryTimeline, linearPosition } from './components/StoryTimeline'
+import { progressLabel } from './data/timeline'
 import { WEATHERS, weatherById } from './data/weather'
 import { useLocalStory } from './hooks/useLocalStory'
 
@@ -33,7 +35,10 @@ function Setup({ value, onChange, onNext }) {
 function Editor({ story, setStory, onFinish }) {
   const [selected, setSelected] = useState('sun')
   const [touchDrag, setTouchDrag] = useState(null)
+  const [view, setView] = useState('circle')
+  const [positionLabel, setPositionLabel] = useState('')
   const addMoment = ({ progress, intensity, weather = selected }) => setStory((current) => ({ ...current, moments: [...current.moments, { id: crypto.randomUUID(), weather, progress, intensity }] }))
+  const moveMoment = (id, position) => setStory((current) => ({ ...current, moments: current.moments.map((moment) => moment.id === id ? { ...moment, ...position } : moment) }))
   const undo = () => setStory((current) => ({ ...current, moments: current.moments.slice(0, -1) }))
   const startDrag = (event, weather) => {
     event.dataTransfer.setData('application/x-meteostory-weather', weather.id)
@@ -48,20 +53,36 @@ function Editor({ story, setStory, onFinish }) {
     setTouchDrag({ weather, x: event.clientX, y: event.clientY })
   }
   const moveTouchDrag = (event) => {
-    if (touchDrag) setTouchDrag((current) => ({ ...current, x: event.clientX, y: event.clientY }))
+    if (!touchDrag) return
+    setTouchDrag((current) => ({ ...current, x: event.clientX, y: event.clientY }))
+    const timeline = document.querySelector(`.editor [data-timeline="${view}"]`)
+    const position = timeline && (view === 'circle'
+      ? positionToMoment(event.clientX, event.clientY, timeline, story.startYear)
+      : linearPosition(event.clientX, event.clientY, timeline, view, story.startYear))
+    if (position) setPositionLabel(progressLabel(position.progress, story.startYear))
   }
   const endTouchDrag = (event) => {
     if (!touchDrag) return
-    const circle = document.querySelector('.editor .story-circle')
-    const position = circle && positionToMoment(event.clientX, event.clientY, circle)
+    const timeline = document.querySelector(`.editor [data-timeline="${view}"]`)
+    const position = timeline && (view === 'circle'
+      ? positionToMoment(event.clientX, event.clientY, timeline, story.startYear)
+      : linearPosition(event.clientX, event.clientY, timeline, view, story.startYear))
     if (position) addMoment({ ...position, weather: touchDrag.weather.id })
     setTouchDrag(null)
   }
   return <main className="screen editor">
-    <div className="editor-heading"><div className="step">02 <span>/ 03</span></div><h2>Composez votre ciel</h2><p>Glissez une météo sur le cercle à l'endroit qui vous ressemble.</p></div>
-    <div className="circle-wrap"><StoryCircle {...story} interactive onAdd={addMoment} /><div className="circle-center"><strong>{story.moments.length}</strong><small>moments déposés</small></div></div>
+    <div className="editor-heading"><div className="step">02 <span>/ 03</span></div><h2>Composez votre ciel</h2><p>Glissez une météo à un mois précis. Vous pourrez la déplacer à tout moment.</p></div>
+    <div className="view-switcher" role="group" aria-label="Choisir la disposition de la frise">
+      <button className={view === 'circle' ? 'active' : ''} onClick={() => setView('circle')} aria-pressed={view === 'circle'}>◯ <span>Circulaire</span></button>
+      <button className={view === 'horizontal' ? 'active' : ''} onClick={() => setView('horizontal')} aria-pressed={view === 'horizontal'}>↔ <span>Horizontale</span></button>
+      <button className={view === 'vertical' ? 'active' : ''} onClick={() => setView('vertical')} aria-pressed={view === 'vertical'}>↕ <span>Verticale</span></button>
+    </div>
+    <div className="position-readout" aria-live="polite">{positionLabel || 'Survolez la frise pour choisir un mois'}</div>
+    {view === 'circle'
+      ? <div className="circle-wrap editor-circle"><StoryCircle {...story} interactive onAdd={addMoment} onMove={moveMoment} onPreview={setPositionLabel} /><div className="circle-center"><strong>{story.moments.length}</strong><small>moments déposés</small></div></div>
+      : <StoryTimeline {...story} view={view} interactive onAdd={addMoment} onMove={moveMoment} onPreview={setPositionLabel} />}
     <section className="weather-dock" aria-label="Palette météo">
-      {WEATHERS.map((weather) => <button key={weather.id} draggable className={selected === weather.id ? 'selected' : ''} onClick={() => setSelected(weather.id)} onDragStart={(event) => startDrag(event, weather)} onPointerDown={(event) => startTouchDrag(event, weather)} onPointerMove={moveTouchDrag} onPointerUp={endTouchDrag} onPointerCancel={() => setTouchDrag(null)} aria-label={`${weather.name}, à glisser sur le cercle`}><b>{weather.emoji}</b><span>{weather.name}</span></button>)}
+      {WEATHERS.map((weather) => <button key={weather.id} draggable className={selected === weather.id ? 'selected' : ''} onClick={() => setSelected(weather.id)} onDragStart={(event) => startDrag(event, weather)} onPointerDown={(event) => startTouchDrag(event, weather)} onPointerMove={moveTouchDrag} onPointerUp={endTouchDrag} onPointerCancel={() => setTouchDrag(null)} aria-label={`${weather.name}, à glisser sur la frise`}><b>{weather.emoji}</b><span>{weather.name}</span></button>)}
     </section>
     {touchDrag && <div className="drag-ghost" style={{ left: touchDrag.x, top: touchDrag.y }} aria-hidden="true">{touchDrag.weather.emoji}</div>}
     <div className="editor-actions"><button className="icon-button" onClick={undo} disabled={!story.moments.length} aria-label="Annuler">↶</button><button className="button primary" onClick={onFinish} disabled={!story.moments.length}>Voir ma MeteoStory <span>→</span></button></div>

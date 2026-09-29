@@ -12,7 +12,8 @@ npm run dev
 ## Fonctionnalités
 
 - choix de l'année de départ ;
-- palette de 12 météos à glisser-déposer, avec une intensité liée à la position radiale ;
+- palette de 12 météos à glisser-déposer et repositionner au mois près ;
+- affichage circulaire, horizontal ou vertical de la frise ;
 - sauvegarde automatique dans le navigateur ;
 - restitution visuelle et synthèse des moments dominants ;
 - interface responsive et accessible au clavier.
