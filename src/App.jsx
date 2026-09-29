@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { StoryCircle } from './components/StoryCircle'
+import { StoryCircle, positionToMoment } from './components/StoryCircle'
 import { WEATHERS, weatherById } from './data/weather'
 import { useLocalStory } from './hooks/useLocalStory'
 
@@ -32,14 +32,38 @@ function Setup({ value, onChange, onNext }) {
 
 function Editor({ story, setStory, onFinish }) {
   const [selected, setSelected] = useState('sun')
-  const addMoment = ({ progress, intensity }) => setStory((current) => ({ ...current, moments: [...current.moments, { id: crypto.randomUUID(), weather: selected, progress, intensity }] }))
+  const [touchDrag, setTouchDrag] = useState(null)
+  const addMoment = ({ progress, intensity, weather = selected }) => setStory((current) => ({ ...current, moments: [...current.moments, { id: crypto.randomUUID(), weather, progress, intensity }] }))
   const undo = () => setStory((current) => ({ ...current, moments: current.moments.slice(0, -1) }))
+  const startDrag = (event, weather) => {
+    event.dataTransfer.setData('application/x-meteostory-weather', weather.id)
+    event.dataTransfer.setData('text/plain', weather.id)
+    event.dataTransfer.effectAllowed = 'copy'
+    setSelected(weather.id)
+  }
+  const startTouchDrag = (event, weather) => {
+    if (event.pointerType === 'mouse') return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setSelected(weather.id)
+    setTouchDrag({ weather, x: event.clientX, y: event.clientY })
+  }
+  const moveTouchDrag = (event) => {
+    if (touchDrag) setTouchDrag((current) => ({ ...current, x: event.clientX, y: event.clientY }))
+  }
+  const endTouchDrag = (event) => {
+    if (!touchDrag) return
+    const circle = document.querySelector('.editor .story-circle')
+    const position = circle && positionToMoment(event.clientX, event.clientY, circle)
+    if (position) addMoment({ ...position, weather: touchDrag.weather.id })
+    setTouchDrag(null)
+  }
   return <main className="screen editor">
-    <div className="editor-heading"><div className="step">02 <span>/ 03</span></div><h2>Composez votre ciel</h2><p>Cliquez sur le cercle pour déposer la météo sélectionnée.</p></div>
+    <div className="editor-heading"><div className="step">02 <span>/ 03</span></div><h2>Composez votre ciel</h2><p>Glissez une météo sur le cercle à l'endroit qui vous ressemble.</p></div>
     <div className="circle-wrap"><StoryCircle {...story} interactive onAdd={addMoment} /><div className="circle-center"><strong>{story.moments.length}</strong><small>moments déposés</small></div></div>
     <section className="weather-dock" aria-label="Palette météo">
-      {WEATHERS.map((weather) => <button key={weather.id} className={selected === weather.id ? 'selected' : ''} onClick={() => setSelected(weather.id)} aria-label={weather.name}><b>{weather.emoji}</b><span>{weather.name}</span></button>)}
+      {WEATHERS.map((weather) => <button key={weather.id} draggable className={selected === weather.id ? 'selected' : ''} onClick={() => setSelected(weather.id)} onDragStart={(event) => startDrag(event, weather)} onPointerDown={(event) => startTouchDrag(event, weather)} onPointerMove={moveTouchDrag} onPointerUp={endTouchDrag} onPointerCancel={() => setTouchDrag(null)} aria-label={`${weather.name}, à glisser sur le cercle`}><b>{weather.emoji}</b><span>{weather.name}</span></button>)}
     </section>
+    {touchDrag && <div className="drag-ghost" style={{ left: touchDrag.x, top: touchDrag.y }} aria-hidden="true">{touchDrag.weather.emoji}</div>}
     <div className="editor-actions"><button className="icon-button" onClick={undo} disabled={!story.moments.length} aria-label="Annuler">↶</button><button className="button primary" onClick={onFinish} disabled={!story.moments.length}>Voir ma MeteoStory <span>→</span></button></div>
   </main>
 }

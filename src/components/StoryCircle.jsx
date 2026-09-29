@@ -1,10 +1,25 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { weatherById } from '../data/weather'
 
 const TAU = Math.PI * 2
 
+export function positionToMoment(clientX, clientY, element) {
+  const rect = element.getBoundingClientRect()
+  const center = rect.width / 2
+  const dx = clientX - rect.left - center
+  const dy = clientY - rect.top - center
+  const distance = Math.hypot(dx, dy)
+  const outer = rect.width * 0.39
+  const inner = outer * 0.57
+  if (distance < inner - 12 || distance > outer + 16) return null
+  let angle = Math.atan2(dy, dx) + Math.PI / 2
+  if (angle < 0) angle += TAU
+  return { progress: angle / TAU, intensity: Math.max(0, Math.min(1, (distance - inner) / (outer - inner))) }
+}
+
 export function StoryCircle({ moments, startYear, interactive = false, onAdd }) {
   const canvasRef = useRef(null)
+  const [dragOver, setDragOver] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -61,18 +76,26 @@ export function StoryCircle({ moments, startYear, interactive = false, onAdd }) 
 
   const handleClick = (event) => {
     if (!interactive || !onAdd) return
-    const rect = event.currentTarget.getBoundingClientRect()
-    const center = rect.width / 2
-    const dx = event.clientX - rect.left - center
-    const dy = event.clientY - rect.top - center
-    const distance = Math.hypot(dx, dy)
-    const outer = rect.width * 0.39
-    const inner = outer * 0.57
-    if (distance < inner - 12 || distance > outer + 16) return
-    let angle = Math.atan2(dy, dx) + Math.PI / 2
-    if (angle < 0) angle += TAU
-    onAdd({ progress: angle / TAU, intensity: Math.max(0, Math.min(1, (distance - inner) / (outer - inner))) })
+    const position = positionToMoment(event.clientX, event.clientY, event.currentTarget)
+    if (position) onAdd(position)
   }
 
-  return <canvas ref={canvasRef} className="story-circle" onClick={handleClick} aria-label="Frise chronologique circulaire" />
+  const handleDrop = (event) => {
+    event.preventDefault()
+    setDragOver(false)
+    const weather = event.dataTransfer.getData('application/x-meteostory-weather') || event.dataTransfer.getData('text/plain')
+    const position = positionToMoment(event.clientX, event.clientY, event.currentTarget)
+    if (position && weatherById(weather)) onAdd({ ...position, weather })
+  }
+
+  return <canvas
+    ref={canvasRef}
+    className={`story-circle${dragOver ? ' drag-over' : ''}`}
+    onClick={handleClick}
+    onDragEnter={() => setDragOver(true)}
+    onDragLeave={() => setDragOver(false)}
+    onDragOver={(event) => event.preventDefault()}
+    onDrop={handleDrop}
+    aria-label="Frise chronologique circulaire, zone de dépôt des météos"
+  />
 }

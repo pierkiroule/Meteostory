@@ -12,7 +12,7 @@ npm run dev
 ## Fonctionnalités
 
 - choix de l'année de départ ;
-- palette de 12 météos et intensité liée à la position radiale ;
+- palette de 12 météos à glisser-déposer, avec une intensité liée à la position radiale ;
 - sauvegarde automatique dans le navigateur ;
 - restitution visuelle et synthèse des moments dominants ;
 - interface responsive et accessible au clavier.
