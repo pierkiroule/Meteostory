@@ -6,6 +6,18 @@ import { WEATHERS, weatherById } from './data/weather'
 import { useLocalStory } from './hooks/useLocalStory'
 
 const yearNow = new Date().getFullYear()
+let audioContext
+
+const playDropSound = () => {
+  const AudioContext = window.AudioContext || window.webkitAudioContext
+  if (!AudioContext) return
+  audioContext ||= new AudioContext()
+  const oscillator = audioContext.createOscillator()
+  const gain = audioContext.createGain()
+  oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(440, audioContext.currentTime); oscillator.frequency.exponentialRampToValueAtTime(760, audioContext.currentTime + .09)
+  gain.gain.setValueAtTime(.0001, audioContext.currentTime); gain.gain.exponentialRampToValueAtTime(.08, audioContext.currentTime + .015); gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + .12)
+  oscillator.connect(gain).connect(audioContext.destination); oscillator.start(); oscillator.stop(audioContext.currentTime + .13)
+}
 
 function Intro({ hasStory, onStart, onResume }) {
   return <main className="screen intro">
@@ -37,6 +49,9 @@ function Editor({ story, setStory, onFinish }) {
   const paletteDrag = useRef(null)
   const [dragGhost, setDragGhost] = useState(null)
   const [dropActive, setDropActive] = useState(false)
+  const [previewPosition, setPreviewPosition] = useState(null)
+  const [soundEnabled, setSoundEnabled] = useState(false)
+  const [dropBurst, setDropBurst] = useState(null)
   const [view, setView] = useState('circle')
   const [positionLabel, setPositionLabel] = useState('')
   const addMoment = ({ progress, intensity, weather = selected }) => setStory((current) => ({ ...current, moments: [...current.moments, { id: crypto.randomUUID(), weather, progress, intensity }] }))
@@ -48,6 +63,7 @@ function Editor({ story, setStory, onFinish }) {
     paletteDrag.current = weather
     setSelected(weather.id)
     setDragGhost({ weather, x: event.clientX, y: event.clientY })
+    if (event.pointerType === 'touch') navigator.vibrate?.(8)
   }
   const getPalettePosition = (event) => {
     const timeline = document.querySelector(`.editor [data-timeline="${view}"]`)
@@ -58,6 +74,7 @@ function Editor({ story, setStory, onFinish }) {
     setDragGhost((current) => ({ ...current, x: event.clientX, y: event.clientY }))
     const position = getPalettePosition(event)
     setDropActive(Boolean(position))
+    setPreviewPosition(position)
     setPositionLabel(position ? progressLabel(position.progress, story.startYear) : '')
   }
   const finishPaletteDrag = (event, cancelled = false) => {
@@ -65,25 +82,45 @@ function Editor({ story, setStory, onFinish }) {
     if (!weather) return
     const position = !cancelled && getPalettePosition(event)
     if (position) addMoment({ ...position, weather: weather.id })
+    if (position) {
+      navigator.vibrate?.([12, 24, 18])
+      if (soundEnabled) playDropSound()
+      const burst = { id: crypto.randomUUID(), x: event.clientX, y: event.clientY }
+      setDropBurst(burst)
+      setTimeout(() => setDropBurst((current) => current?.id === burst.id ? null : current), 650)
+    }
     paletteDrag.current = null
     setDragGhost(null)
     setDropActive(false)
+    setPreviewPosition(null)
+  }
+  const finishMomentMove = (event) => {
+    navigator.vibrate?.(12)
+    if (soundEnabled) playDropSound()
+    if (event?.clientX) {
+      const burst = { id: crypto.randomUUID(), x: event.clientX, y: event.clientY }
+      setDropBurst(burst)
+      setTimeout(() => setDropBurst((current) => current?.id === burst.id ? null : current), 650)
+    }
   }
   return <main className="screen editor">
-    <div className="editor-heading"><div className="step">02 <span>/ 03</span></div><h2>Composez votre ciel</h2><p>Glissez une météo à un mois précis. Vous pourrez la déplacer à tout moment.</p></div>
+    <div className="editor-heading"><div className="step">02 <span>/ 03</span></div><h2>Composez votre ciel</h2><p>Glissez une météo sur le fil : elle s'aimante au mois le plus proche et reste déplaçable.</p></div>
     <div className="view-switcher" role="group" aria-label="Choisir la disposition de la frise">
       <button className={view === 'circle' ? 'active' : ''} onClick={() => setView('circle')} aria-pressed={view === 'circle'}>◯ <span>Circulaire</span></button>
       <button className={view === 'horizontal' ? 'active' : ''} onClick={() => setView('horizontal')} aria-pressed={view === 'horizontal'}>↔ <span>Horizontale</span></button>
       <button className={view === 'vertical' ? 'active' : ''} onClick={() => setView('vertical')} aria-pressed={view === 'vertical'}>↕ <span>Verticale</span></button>
     </div>
+    <button className={`sound-toggle${soundEnabled ? ' active' : ''}`} onClick={() => setSoundEnabled((enabled) => !enabled)} aria-pressed={soundEnabled} aria-label={`Effets sonores ${soundEnabled ? 'activés' : 'désactivés'}`}>{soundEnabled ? '♪ Son' : '♩ Son'}</button>
     <div className="position-readout" aria-live="polite">{positionLabel || 'Survolez la frise pour choisir un mois'}</div>
     {view === 'circle'
-      ? <div className="circle-wrap editor-circle"><StoryCircle {...story} interactive dropActive={dropActive} onAdd={addMoment} onMove={moveMoment} onPreview={setPositionLabel} /><div className="circle-center"><strong>{story.moments.length}</strong><small>moments déposés</small></div></div>
-      : <StoryTimeline {...story} view={view} interactive dropActive={dropActive} onAdd={addMoment} onMove={moveMoment} onPreview={setPositionLabel} />}
+      ? <div className="circle-wrap editor-circle"><StoryCircle {...story} interactive dropActive={dropActive} previewPosition={previewPosition} onAdd={addMoment} onMove={moveMoment} onMoveEnd={finishMomentMove} onPreview={setPositionLabel} /><div className="circle-center"><strong>{story.moments.length}</strong><small>perles météo</small></div></div>
+      : <StoryTimeline {...story} view={view} interactive dropActive={dropActive} previewPosition={previewPosition} onMove={moveMoment} onMoveEnd={finishMomentMove} onPreview={setPositionLabel} />}
     <section className="weather-dock" aria-label="Palette météo">
       {WEATHERS.map((weather) => <button key={weather.id} className={selected === weather.id ? 'selected' : ''} onClick={() => setSelected(weather.id)} onPointerDown={(event) => startPaletteDrag(event, weather)} onPointerMove={movePaletteDrag} onPointerUp={finishPaletteDrag} onPointerCancel={(event) => finishPaletteDrag(event, true)} onLostPointerCapture={(event) => finishPaletteDrag(event, true)} aria-label={`${weather.name}, à glisser sur la frise`}><b>{weather.emoji}</b><span>{weather.name}</span></button>)}
     </section>
     {dragGhost && <div className="drag-ghost" style={{ left: dragGhost.x, top: dragGhost.y }} aria-hidden="true">{dragGhost.weather.emoji}</div>}
+    {dragGhost && <div className="drag-particles" style={{ left: dragGhost.x, top: dragGhost.y }} aria-hidden="true">{Array.from({ length: 7 }, (_, index) => <i key={index} style={{ '--i': index }} />)}</div>}
+    {dropBurst && <div className="drop-burst" style={{ left: dropBurst.x, top: dropBurst.y }} aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <i key={index} style={{ '--i': index }} />)}</div>}
     <div className="editor-actions"><button className="icon-button" onClick={undo} disabled={!story.moments.length} aria-label="Annuler">↶</button><button className="button primary" onClick={onFinish} disabled={!story.moments.length}>Voir ma MeteoStory <span>→</span></button></div>
   </main>
 }
